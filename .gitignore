@@ -98,5 +98,12 @@ ai-cli-crash-capture/
 # Sync artifacts
 sync_report*.txt
 
+# Lua
+*.luac
+.luarocks/
+
+# Machine-readable locks
+.machine_readable/.locks/
+
 # Hypatia scan cache (local-only)
 .hypatia/
