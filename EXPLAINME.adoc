@@ -1,25 +1,183 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-= RSR Template Repository — Show Me The Receipts
+= pandoc-a2ml — Show Me The Receipts
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc:
 :icons: font
 
 The README makes claims. This file backs them up.
 
-[quote, README]
+== Pandoc Can Read and Write A2ML
+
+[quote, a2ml-reader.lua]
 ____
-The AI reads the manifest, asks you a few questions, and handles everything.
+a2ml-reader.lua — Pandoc custom reader for A2ML (Attested Markup Language)
+Parses .a2ml files into Pandoc's internal AST, enabling conversion
+to any Pandoc output format (HTML, PDF, DOCX, Markdown, etc.).
+Usage:
+  pandoc -f a2ml-reader.lua input.a2ml -o output.html
+  pandoc -f a2ml-reader.lua input.a2ml -t markdown
 ____
+
+The repo contains three cooperating Lua components. `a2ml-reader.lua`
+implements the Pandoc custom reader protocol: the `Reader(input,
+reader_options)` function is called by Pandoc with the raw file content and
+must return a `pandoc.Pandoc` value. It is line-by-line: it recognises
+Scheme-style comments (`;; ...`), headings (`#`–`#####`), directive blocks
+(`@name: ... @end`), fenced code blocks (`` ` `` ` `` ` `` or `~~~`), bullet
+lists (`- ` or `* `), and blank lines that flush paragraph buffers. Directive
+blocks become `pandoc.Div` elements with classes `"a2ml-directive"` and
+`"a2ml-<name>"` — this encoding allows downstream filters to identify and
+process specific directive types.
+
+`a2ml-writer.lua` reverses the process: `Writer(doc, opts)` walks the Pandoc
+AST and serialises it back to A2ML surface syntax. Headings become `#`-prefixed
+lines, `BulletList` becomes `- ` items, `CodeBlock` becomes fenced blocks with
+the language tag, `Div` elements with class `a2ml-*` become `@name: ... @end`
+blocks, and internal links (`#id`) become `@ref(id)`.
+
+`a2ml-filter.lua` is a six-capability post-processing Lua filter (passed via
+`--lua-filter`). It runs in three traversal passes: (1) collects heading IDs
+and enriches metadata from git; (2) resolves `@ref(id)` cross-references,
+processes `@include(file.a2ml)` file inclusions, and renders mermaid/graphviz
+diagrams via `pandoc.pipe`; (3) generates a table of contents and validates
+SPDX headers.
+
+**Caveat:** The reader's inline parser (`parse_inlines`) uses a greedy
+single-pass scan without backtracking. Strong (`**`) is checked before
+emphasis (`*`) at each position; this means interleaved emphasis is not
+correctly handled. The `@ref(id)` inline recognition in the reader treats
+`@ref(...)` as a link to `#id`, but the attribute class `"a2ml-ref"` is
+only set by the filter pass — the reader currently just emits a plain link
+without the class, so the filter's `resolve_crossrefs` validation pass will
+miss references produced in the first stage. The `@include` filter falls back
+to `markdown` format rather than re-invoking the A2ML reader, so included
+files are parsed as Markdown, not A2ML.
+
+- Reader entry: `a2ml-reader.lua:30` (`Reader(input, reader_options)`)
+- Writer entry: `a2ml-writer.lua:13` (`Writer(doc, opts)`)
+- Filter pipeline: `a2ml-filter.lua:424–450` (three-pass traversal table)
+- Sample document: `sample.a2ml` (heading, abstract directive, bullet list, refs block)
+- Learn more: https://pandoc.org/custom-readers.html, https://pandoc.org/lua-filters.html
+
+== Six-Capability Filter Pipeline
+
+[quote, a2ml-filter.lua]
+____
+Capabilities:
+  1. Cross-reference resolver: @ref(id) → clickable internal links
+  2. Include directive: @include(file.a2ml) → pull in external file content
+  3. TOC generator: auto-generate table of contents from sections
+  4. Diagram rendering: mermaid/graphviz code blocks → images via pandoc.pipe()
+  5. SPDX validator: check SPDX header present, warn if missing
+  6. Metadata enrichment: populate version/date from git if absent
+____
+
+The filter is structured as a table of three Pandoc traversals returned from
+the module. Pass 1 calls `read_extension_flags` (reads `a2ml-*` metadata
+keys to toggle capabilities) and `collect_headings` (builds `heading_ids`
+and `toc_entries` tables for later passes). Pass 2 runs three element
+filters in parallel: `process_includes` on Div elements (reads external
+files via `io.open` and `pandoc.read`), `resolve_crossrefs` on Link elements
+(validates targets against `heading_ids`, adds CSS classes), and
+`render_diagrams` on CodeBlock elements (invokes `mmdc` or `dot` via
+`pandoc.pipe`, falls back gracefully if tools are absent). Pass 3 calls
+`validate_spdx` (warns if no `SPDX-License-Identifier` found in first 5
+blocks or metadata) and `generate_toc` (inserts a `BulletList` wrapped in a
+`Div#a2ml-toc` after the first H1).
+
+Diagram support covers both Mermaid (requires `mmdc` CLI from
+`@mermaid-js/mermaid-cli`) and Graphviz/DOT (requires `dot` from the
+`graphviz` package). Both are invoked via stdin/stdout through `pandoc.pipe`.
+The result is a `RawBlock "html"` containing the SVG — this only works for
+HTML output targets.
+
+**Caveat:** The TOC generator inserts a flat `BulletList` regardless of
+heading depth — indentation is simulated by prepending spaces to list items
+rather than building a nested list structure. This produces correct visual
+output in HTML but poor semantic markup. Diagram rendering requires external
+CLI tools to be on `PATH`; the filter degrades to showing source code if they
+are absent. The `@include` filter calls `pcall(pandoc.read, content, format)`
+with `format = "markdown"` even for `.a2ml` files — see Caveat above.
+
+- Cross-reference resolver: `a2ml-filter.lua:120–154`
+- Include processor: `a2ml-filter.lua:160–236`
+- TOC generator: `a2ml-filter.lua:243–287`
+- Diagram renderer: `a2ml-filter.lua:297–339` (mermaid via mmdc, graphviz via dot)
+- SPDX validator: `a2ml-filter.lua:344–373`
+- Metadata enrichment: `a2ml-filter.lua:379–411` (git log, git describe, git config)
+- Learn more: https://github.com/mermaid-js/mermaid (Mermaid), https://graphviz.org (Graphviz)
+
+== MIT License (Third-Party Lua Glue)
+
+[quote, a2ml-reader.lua]
+____
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Jonathan D.A. Jewell
+____
+
+The Lua source files carry MIT rather than PMPL-1.0-or-later because they
+are Pandoc Lua filter files — a scripting layer for a third-party tool — and
+MIT is the conventional and maximally compatible license for Pandoc Lua
+scripts distributed via LuaRocks (`pandoc-a2ml-scm-1.rockspec`). The
+repository wrapper (`LICENSE`, container files, CI workflows) remains
+PMPL-1.0-or-later.
+
+**Caveat:** LuaRocks (`pandoc-a2ml-scm-1.rockspec`) requires the MIT
+identifier in the rockspec `license` field. The PMPL-1.0-or-later cannot be
+used here without breaking LuaRocks distribution. This is a platform-forced
+fallback, consistent with the project-wide MPL-2.0 fallback policy for
+similar reasons.
+
+- License files: `LICENSE` (PMPL-1.0-or-later for repo), Lua source files carry MIT
+- LuaRocks spec: `pandoc-a2ml-scm-1.rockspec`
+- Learn more: https://luarocks.org/modules/hyperpolymath/pandoc-a2ml (forthcoming)
+
+== Dogfooded Across The Account
+
+[cols="1,2"]
+|===
+| Technology | Also Used In
+
+| **A2ML format** | https://github.com/hyperpolymath/a2ml-rs[a2ml-rs] (Rust parser/renderer), https://github.com/hyperpolymath/a2ml-haskell[a2ml-haskell] (Haskell parser), https://github.com/hyperpolymath/tree-sitter-a2ml[tree-sitter-a2ml] (grammar)
+
+| **Pandoc Lua API** | https://github.com/hyperpolymath/pandoc-k9[pandoc-k9] (K9 reader and writer), https://github.com/hyperpolymath/docmatrix[docmatrix] (Pandoc-based document conversion)
+
+| **SPDX validation** | https://github.com/hyperpolymath/hypatia[hypatia] (CI SPDX rules), https://github.com/hyperpolymath/panic-attacker[panic-attacker] (quality scan)
+
+| **Mermaid diagram rendering** | https://github.com/hyperpolymath/docmatrix[docmatrix], documentation generation pipelines
+
+| **LuaRocks packaging** | https://github.com/hyperpolymath/pandoc-k9[pandoc-k9] (`pandoc-k9-scm-1.rockspec`)
+|===
 
 == File Map
 
 [cols="1,2"]
 |===
-| Path | What's There
+| Path | Proves
 
-| `src/` | Source code
-| `test(s)/` | Test suite
+| `a2ml-reader.lua` | Pandoc custom reader: `Reader()` entry, line-by-line A2ML parser → Pandoc AST (headings, directives as Div, code blocks, bullet lists, inline formatting)
+
+| `a2ml-writer.lua` | Pandoc custom writer: `Writer()` entry, AST → A2ML text (headings, paragraphs, Div → directive blocks, BulletList → `- ` items, internal links → `@ref()`)
+
+| `a2ml-filter.lua` | Six-capability Lua filter: cross-reference resolution, file inclusion, TOC generation, diagram rendering (mermaid+graphviz), SPDX validation, git metadata enrichment
+
+| `a2ml.lua` | Combined reader+filter convenience script (single `--from` target for users who do not run a separate filter step)
+
+| `sample.a2ml` | Reference input file demonstrating A2ML surface syntax: heading, `@abstract:` directive, bullet list, `@refs:` directive
+
+| `expected.html` | Expected HTML output from `pandoc -f a2ml-reader.lua sample.a2ml -o expected.html`
+
+| `a2ml.html` | Pre-generated HTML render of the sample document (reference output)
+
+| `pandoc-a2ml-scm-1.rockspec` | LuaRocks package specification (MIT license for LuaRocks distribution)
+
+| `tests/test_a2ml.lua` | Unit tests for reader and writer using the Lua test framework
+
+| `tests/property_test.lua` | Property tests: `read(write(doc)) == doc` round-trip for generated documents
+
+| `tests/bench_test.lua` | Benchmark tests: parse throughput for large A2ML documents
+
+| `0-AI-MANIFEST.a2ml` | AI session gatekeeper — read first before modifying any file
+
+| `.machine_readable/` | A2ML state files: STATE.a2ml, ECOSYSTEM.a2ml, META.a2ml
 |===
-
-== Questions?
-
-Open an issue or reach out directly — happy to explain anything in more detail.
