@@ -15,7 +15,7 @@ function Writer(doc, opts)
   local function add(s) table.insert(buffer, s) end
 
   -- SPDX header
-  add(";; SPDX-License-Identifier: PMPL-1.0-or-later")
+  add(";; SPDX-License-Identifier: MPL-2.0")
   add("")
 
   for _, block in ipairs(doc.blocks) do

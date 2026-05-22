@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = pandoc-a2ml — Show Me The Receipts
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc:
@@ -115,20 +115,20 @@ ____
 -- Copyright (c) 2026 Jonathan D.A. Jewell
 ____
 
-The Lua source files carry MIT rather than PMPL-1.0-or-later because they
+The Lua source files carry MIT rather than MPL-2.0 because they
 are Pandoc Lua filter files — a scripting layer for a third-party tool — and
 MIT is the conventional and maximally compatible license for Pandoc Lua
 scripts distributed via LuaRocks (`pandoc-a2ml-scm-1.rockspec`). The
 repository wrapper (`LICENSE`, container files, CI workflows) remains
-PMPL-1.0-or-later.
+MPL-2.0.
 
 **Caveat:** LuaRocks (`pandoc-a2ml-scm-1.rockspec`) requires the MIT
-identifier in the rockspec `license` field. The PMPL-1.0-or-later cannot be
+identifier in the rockspec `license` field. The MPL-2.0 cannot be
 used here without breaking LuaRocks distribution. This is a platform-forced
 fallback, consistent with the project-wide MPL-2.0 fallback policy for
 similar reasons.
 
-- License files: `LICENSE` (PMPL-1.0-or-later for repo), Lua source files carry MIT
+- License files: `LICENSE` (MPL-2.0 for repo), Lua source files carry MIT
 - LuaRocks spec: `pandoc-a2ml-scm-1.rockspec`
 - Learn more: https://luarocks.org/modules/hyperpolymath/pandoc-a2ml (forthcoming)
 
