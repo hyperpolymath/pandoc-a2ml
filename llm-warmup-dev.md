@@ -1,3 +1,7 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 # LLM Warmup — pandoc-a2ml (Developer)
 
 ## What is pandoc-a2ml?
