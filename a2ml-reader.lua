@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MIT
+-- SPDX-License-Identifier: MPL-2.0
 -- Copyright (c) 2026 Jonathan D.A. Jewell
 --
 -- a2ml-reader.lua — Pandoc custom reader for A2ML (Attested Markup Language)
